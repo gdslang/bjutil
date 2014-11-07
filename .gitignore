@@ -1,0 +1,9 @@
+/.cproject
+/.project
+/.settings/
+/build/
+/cbuild/
+
+/libbjutil.a
+
+/documentation
