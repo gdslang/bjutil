@@ -91,15 +91,19 @@ tuple<bool, binary_provider::entry_t> elf_provider::entry(string symbol_name) {
   return make_tuple(true, entry);
 }
 
-binary_provider::bin_range_t elf_provider::bin_range() {
-  bin_range_t range;
+binary_provider::entry_t elf_provider::bin_range() {
+  return section(".text");
+}
+
+binary_provider::entry_t elf_provider::section(std::string name) {
+  entry_t range;
 
   size_t shstrndx;
   if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
 
   Elf_Scn *scn = NULL;
 
-  bool found_text = false;
+  bool found_section = false;
 
   while((scn = elf_nextscn(elf->get_elf(), scn)) != NULL) {
     GElf_Shdr shdr;
@@ -108,15 +112,15 @@ binary_provider::bin_range_t elf_provider::bin_range() {
     char *section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
     if(!section_name) throw new string("gelf_strptr() :-(");
 
-    if(!strcmp(section_name, ".text")) {
+    if(!strcmp(section_name, name.c_str())) {
       range.address = shdr.sh_addr;
       range.offset = shdr.sh_offset;
       range.size = shdr.sh_size;
-      found_text = true;
+      found_section = true;
     }
   }
 
-  if(!found_text) throw new string("Unable to find entry");
+  if(!found_section) throw new string("Invalid section");
 
   return range;
 }

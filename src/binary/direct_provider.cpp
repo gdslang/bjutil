@@ -22,8 +22,7 @@ direct_provider::~direct_provider() {
 }
 
 tuple<bool, binary_provider::entry_t> direct_provider::entry(string symbol) {
-  if(symbol != "main")
-    return binary_provider::entry(symbol);
+  if(symbol != "main") return binary_provider::entry(symbol);
 
   entry_t entry;
 
@@ -34,12 +33,12 @@ tuple<bool, binary_provider::entry_t> direct_provider::entry(string symbol) {
   return make_tuple(true, entry);
 }
 
-binary_provider::bin_range_t direct_provider::bin_range() {
-  bin_range_t range;
+binary_provider::entry_t direct_provider::bin_range() {
+  entry_t range;
 
   range.address = 0;
   range.offset = 0;
-  range.size =  size;
+  range.size = size;
 
   return range;
 }

@@ -38,16 +38,10 @@ public:
   virtual tuple<bool, entry_t> entry(string symbol);
   void add_entry(string symbol, entry_t entry);
 
-  struct bin_range_t {
-    size_t offset;
-    size_t address;
-    size_t size;
-  };
-
   /**
    * Get the code section within the binary data (e.g. the .text section in an elf file)
    */
-  virtual bin_range_t bin_range() = 0;
+  virtual entry_t bin_range() = 0;
 
   struct data_t {
     uint8_t *data;

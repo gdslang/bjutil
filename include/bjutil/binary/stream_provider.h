@@ -23,6 +23,6 @@ public:
   virtual ~stream_provider();
 
   virtual tuple<bool, entry_t> entry(string symbol);
-  virtual bin_range_t bin_range();
+  virtual entry_t bin_range();
   virtual data_t get_data();
 };

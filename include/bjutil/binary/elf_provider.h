@@ -63,7 +63,8 @@ public:
   ~elf_provider();
 
   std::tuple<bool, entry_t> entry(std::string symbol);
-  bin_range_t bin_range();
+  entry_t bin_range();
+  entry_t section(std::string name);
 
   std::tuple<bool, size_t> deref(void *address);
 };

@@ -46,8 +46,8 @@ tuple<bool, binary_provider::entry_t> stream_provider::entry(string symbol) {
   return binary_provider::entry(symbol);
 }
 
-binary_provider::bin_range_t stream_provider::bin_range() {
-  bin_range_t range;
+binary_provider::entry_t stream_provider::bin_range() {
+  entry_t range;
 
   range.address = 0;
   range.offset = 0;
