@@ -15,21 +15,6 @@
 #include <type_traits>
 
 template<typename T>
-class streamer {
-private:
-  const T &elem;
-public:
-  streamer(const T &elem) : elem(elem) {
-  }
-
-  std::string operator ()() {
-    std::stringstream ss;
-    ss << elem;
-    return ss.str();
-  }
-};
-
-template<typename T>
 std::function<std::string()> stream(const T &elem) {
   return [=]() {
     std::stringstream ss;
@@ -38,18 +23,10 @@ std::function<std::string()> stream(const T &elem) {
   };
 }
 
-//template<typename T>
-//streamer<T> stream(const T &elem) {
-//  return streamer<T>(elem);
-//}
-
 template<typename T>
 std::function<std::string(const T &elem)> stream() {
   return [](const T &elem) {
-//    return stream(elem)();
-    std::stringstream ss;
-    ss << elem;
-    return ss.str();
+    return stream(elem)();
   };
 }
 
