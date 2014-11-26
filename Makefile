@@ -44,4 +44,3 @@ exec: all
 .PHONY: clean
 clean:
 	rm -rf $(BDIRS) $(LIBRARY)
-	$(MAKE) -C exec/ clean
