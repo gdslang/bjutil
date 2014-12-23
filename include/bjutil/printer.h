@@ -15,21 +15,6 @@
 #include <type_traits>
 #include <map>
 
-template<typename T>
-std::function<std::string()> stream(const T &elem) {
-  return [=]() {
-    std::stringstream ss;
-    ss << elem;
-    return ss.str();
-  };
-}
-
-template<typename T>
-std::function<std::string(const T &elem)> stream() {
-  return [](const T &elem) {
-    return stream(elem)();
-  };
-}
 
 template<typename, typename, typename...>
 class printer;
@@ -57,6 +42,22 @@ public:
 };
 
 
+template<typename T>
+std::function<std::string()> stream(const T &elem) {
+  return [=]() {
+    std::stringstream ss;
+    ss << elem;
+    return ss.str();
+  };
+}
+
+template<typename T>
+std::function<std::string(const T &elem)> stream() {
+  return [](const T &elem) {
+    return stream(elem)();
+  };
+}
+
 template<typename X, typename R, typename ... ELEM_T>
 printer<X, R, ELEM_T...> print(const X &coll, std::function<R(const ELEM_T &e)> ... printers) {
   return printer<X, R, ELEM_T...>(coll, make_tuple(printers...));
@@ -72,8 +73,15 @@ printer<std::set<ELEM_T>, std::string, ELEM_T> print(const std::set<ELEM_T> &col
   return print(coll, stream<ELEM_T>());
 }
 
+template<typename T>
+std::function<std::string(const T &elem)> stream_printer() {
+  return [](const T &elem) {
+    return stream(print(elem))();
+  };
+}
+
 APPEND_OP_IMPL(set) {
-  decltype(std::get<0>(sp.printers)) print = std::get<0>(sp.printers);
+  decltype(std::get<0>(sp.printers)) &&print = std::get<0>(sp.printers);
   bool first = true;
   out << "{";
   for(auto &e : sp.coll) {
@@ -86,8 +94,8 @@ APPEND_OP_IMPL(set) {
 }
 
 APPEND_OP_IMPL(map) {
-  decltype(std::get<0>(sp.printers)) key_print = std::get<0>(sp.printers);
-  decltype(std::get<1>(sp.printers)) value_print = std::get<1>(sp.printers);
+  decltype(std::get<0>(sp.printers)) &&key_print = std::get<0>(sp.printers);
+  decltype(std::get<1>(sp.printers)) &&value_print = std::get<1>(sp.printers);
   bool first = true;
   out << "{";
   for(auto &e : sp.coll) {
