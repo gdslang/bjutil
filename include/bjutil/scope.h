@@ -9,7 +9,6 @@
 
 #include <vector>
 #include <functional>
-
 #include <iostream>
 
 //#define SCOPE_EXIT_INIT(HANDLER) scope_exit exit([&]() {\
@@ -22,21 +21,10 @@ class scope_exit {
 private:
   std::vector<handler_t> handlers;
 
+  void call();
 public:
-  scope_exit(handler_t body) {
-    handlers.push_back(initial);
-    try {
-      body();
-    } catch(...) {
-      for(auto &handler : handlers)
-        handler();
-      throw;
-    }
-  }
+  scope_exit(handler_t body);
   ~scope_exit() {
   }
-
-  void add(handler_t handler) {
-    handlers.push_back(handler);
-  }
+  void operator()(handler_t handler);
 };
