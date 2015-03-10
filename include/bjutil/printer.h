@@ -19,6 +19,19 @@
 template<typename, typename, typename...>
 class printer;
 
+//template<typename...Ts>
+//using tuple_cat_t = decltype(std::tuple_cat(std::declval<Ts>()...));
+//
+//template<typename T, typename...Ts>
+//using remove_t = tuple_cat_t<
+//    typename std::conditional<
+//        std::is_same<T, Ts>::value,
+//        std::tuple<>,
+//        std::tuple<Ts>
+//    >::type...
+//>;
+//http://stackoverflow.com/questions/23855712/how-can-a-type-be-removed-from-a-template-parameter-pack
+
 #define APPEND_OP(COLL, DEF) template<typename COLL_T, typename R, typename... E, \
   typename std::enable_if<std::is_same<COLL_T, std::COLL<E...>>::value>::type* DEF> \
   std::ostream &operator<<(std::ostream &out, const printer<COLL_T, R, E...> &sp)
@@ -41,7 +54,6 @@ public:
   }
 };
 
-
 template<typename T>
 std::function<std::string()> stream(const T &elem) {
   return [=]() {
@@ -52,9 +64,25 @@ std::function<std::string()> stream(const T &elem) {
 }
 
 template<typename T>
+std::function<std::string()> stream_ptr(const T &elem) {
+  return [=]() {
+    std::stringstream ss;
+    ss << *elem;
+    return ss.str();
+  };
+}
+
+template<typename T>
 std::function<std::string(const T &elem)> stream() {
   return [](const T &elem) {
     return stream(elem)();
+  };
+}
+
+template<typename T>
+std::function<std::string(const T &elem)> stream_ptr() {
+  return [](const T &elem) {
+    return stream_ptr(elem)();
   };
 }
 
