@@ -26,10 +26,6 @@ using std::tie;
 using std::vector;
 
 void elf_provider::init() {
-  if(elf_version(EV_CURRENT) == EV_NONE) {
-    throw new string("EV_NONE :-(");
-  }
-
   if(elf_kind(elf->get_elf()) != ELF_K_ELF) throw new string("Wrong elf kind :-(");
 
   //Collect symbols
@@ -53,6 +49,11 @@ elf_provider::elf_provider(const char *file) :
     file_provider(file) {
   _file_fd *fd = new _file_fd(open(file, O_RDONLY));
   this->fd = fd;
+
+  if(elf_version(EV_CURRENT) == EV_NONE) {
+    throw new string("EV_NONE :-(");
+  }
+
   elf = new _Elf(elf_begin(fd->get_fd(), ELF_C_READ, NULL));
   init();
 }
@@ -61,6 +62,11 @@ elf_provider::elf_provider(char *buffer, size_t size) :
   file_provider(buffer, size) {
   _mem_fd *fd = new _mem_fd(buffer);
   this->fd = fd;
+
+  if(elf_version(EV_CURRENT) == EV_NONE) {
+    throw new string("EV_NONE :-(");
+  }
+
   elf = new _Elf(elf_memory(fd->get_memory(), size));
   init();
 }
