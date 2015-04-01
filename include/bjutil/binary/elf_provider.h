@@ -22,18 +22,39 @@ private:
   sliced_memory *elf_mem;
 
   struct _fd {
+    virtual ~_fd() {
+    }
+  };
+
+  struct _file_fd : public _fd {
     int fd;
 
     int get_fd() {
       return fd;
     }
 
-    _fd(int fd) {
+    _file_fd(int fd) {
       this->fd = fd;
       if(!fd) throw new std::string("Unable to open file");
     }
-    ~_fd() {
+    ~_file_fd() {
       close(fd);
+    }
+  };
+
+  struct _mem_fd : public _fd {
+    char *memory;
+
+    char *get_memory() {
+      return memory;
+    }
+
+    _mem_fd(char *memory) {
+      this->memory = memory;
+
+    }
+    ~_mem_fd() {
+      delete memory;
     }
   };
 
@@ -58,8 +79,10 @@ private:
   _Elf *elf = NULL;
 
   bool symbols(std::function<bool(GElf_Sym, string)> callback);
+  void init();
 public:
   elf_provider(char const *file);
+  elf_provider(char *buffer, size_t size);
   ~elf_provider();
 
   std::tuple<bool, entry_t> entry(std::string symbol);

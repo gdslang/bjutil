@@ -13,5 +13,9 @@ file_provider::file_provider(const char *file) :
     stream_provider(fopen(file, "r")) {
 }
 
+file_provider::file_provider(char* buffer, size_t size) :
+  stream_provider(fmemopen(buffer, size, "r")) {
+}
+
 file_provider::~file_provider() {
 }
