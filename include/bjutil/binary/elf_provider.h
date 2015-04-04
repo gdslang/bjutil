@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <bjutil/binary/elf_provider.h>
 #include <bjutil/binary/file_provider.h>
 #include <bjutil/sliced_memory.h>
 #include <gelf.h>
@@ -54,7 +53,7 @@ private:
 
     }
     ~_mem_fd() {
-      delete memory;
+      free(memory);
     }
   };
 
