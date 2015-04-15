@@ -35,7 +35,7 @@ public:
     }
   };
 
-  virtual tuple<bool, entry_t> entry(string symbol);
+  virtual tuple<bool, entry_t> entry(string symbol) const;
   void add_entry(string symbol, entry_t entry);
 
   /**
@@ -48,7 +48,7 @@ public:
     size_t size;
   };
 
-  virtual data_t get_data() = 0;
+  virtual data_t get_data() const = 0;
 
   virtual std::tuple<bool, uint64_t> deref(void *address);
 private:

@@ -77,16 +77,19 @@ private:
 
   _Elf *elf = NULL;
 
-  bool symbols(std::function<bool(GElf_Sym, string)> callback);
+  bool symbols(std::function<bool(GElf_Sym, string)> callback) const;
   void init();
 public:
   elf_provider(char const *file);
   elf_provider(char *buffer, size_t size);
   ~elf_provider();
 
-  std::tuple<bool, entry_t> entry(std::string symbol);
+  std::tuple<bool, entry_t> entry(std::string symbol) const;
   entry_t bin_range();
   entry_t section(std::string name);
 
-  std::tuple<bool, size_t> deref(void *address);
+  std::tuple<data_t, size_t, bool> deref(void *address, size_t bytes) const;
+  bool deref(void *address, size_t bytes, uint8_t *buffer) const;
+  std::tuple<bool, size_t> deref(void *address) const;
+  bool check(void *address, size_t bytes) const;
 };

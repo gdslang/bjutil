@@ -20,10 +20,35 @@
 #include <tuple>
 #include <vector>
 
-using std::make_tuple;
-using std::string;
-using std::tie;
-using std::vector;
+using namespace std;
+
+bool elf_provider::symbols(std::function<bool(GElf_Sym, string)> callback) const {
+  size_t shstrndx;
+  if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
+
+  Elf_Scn *scn = NULL;
+  while((scn = elf_nextscn(elf->get_elf(), scn)) != NULL) {
+    GElf_Shdr shdr;
+    if(gelf_getshdr(scn, &shdr) != &shdr) throw new string("gelf_getshdr() :-(");
+
+    Elf_Data *d = elf_getdata(scn, NULL);
+
+    char *section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
+    if(!section_name) throw new string("gelf_strptr() :-(");
+
+    if(!strcmp(section_name, ".symtab")) {
+      if(!shdr.sh_entsize) throw new string("Empty entries in symbol table?!");
+      for(uint64_t i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
+        GElf_Sym sym;
+        if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
+        const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
+        if(callback(sym, string(sym_name))) return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 void elf_provider::init() {
   if(elf_kind(elf->get_elf()) != ELF_K_ELF) throw new string("Wrong elf kind :-(");
@@ -77,7 +102,7 @@ elf_provider::~elf_provider() {
   delete elf_mem;
 }
 
-tuple<bool, binary_provider::entry_t> elf_provider::entry(string symbol_name) {
+tuple<bool, binary_provider::entry_t> elf_provider::entry(string symbol_name) const {
   entry_t entry;
 
   size_t shstrndx;
@@ -142,12 +167,12 @@ binary_provider::entry_t elf_provider::section(std::string name) {
   return range;
 }
 
-std::tuple<bool, uint64_t> elf_provider::deref(void *address) {
+std::tuple<binary_provider::data_t, size_t, bool> elf_provider::deref(void *address, size_t bytes) const {
   bool success;
   slice s;
   tie(success, s) = elf_mem->deref(address);
 
-  if(!success) return make_tuple(false, 0);
+  if(!success) return make_tuple(data_t(), 0, false);
 
   binary_provider::entry_t e;
   tie(success, e) = entry(s.symbol);
@@ -155,37 +180,27 @@ std::tuple<bool, uint64_t> elf_provider::deref(void *address) {
   size_t offset = e.offset + ((size_t) address - e.address);
 
   data_t d = get_data();
-  if(offset >= d.size) throw string("offset >= d.size");
-
-  uint64_t *value = (uint64_t*) (get_data().data + offset);
-
-  return make_tuple(true, *value);
+//  if(offset + size >= d.size) throw string("elf_provider::deref(void*,size_t,uint8_t*): offset + size >= d.size");
+  return make_tuple(d, offset, offset + bytes < d.size);
 }
 
-bool elf_provider::symbols(std::function<bool(GElf_Sym, string)> callback) {
-  size_t shstrndx;
-  if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
+bool elf_provider::deref(void *address, size_t bytes, uint8_t *buffer) const {
+  bool success;
+  size_t offset;
+  data_t d;
+  tie(d, offset, success) = deref(address, bytes);
+  if(success) memcpy(buffer, get_data().data + offset, bytes);
+  return success;
+}
 
-  Elf_Scn *scn = NULL;
-  while((scn = elf_nextscn(elf->get_elf(), scn)) != NULL) {
-    GElf_Shdr shdr;
-    if(gelf_getshdr(scn, &shdr) != &shdr) throw new string("gelf_getshdr() :-(");
+std::tuple<bool, uint64_t> elf_provider::deref(void *address) const {
+  uint64_t value;
+  bool success = deref(address, sizeof(value), (uint8_t*)&value);
+  return make_tuple(success, value);
+}
 
-    Elf_Data *d = elf_getdata(scn, NULL);
-
-    char *section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
-    if(!section_name) throw new string("gelf_strptr() :-(");
-
-    if(!strcmp(section_name, ".symtab")) {
-      if(!shdr.sh_entsize) throw new string("Empty entries in symbol table?!");
-      for(uint64_t i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
-        GElf_Sym sym;
-        if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
-        const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
-        if(callback(sym, string(sym_name))) return true;
-      }
-    }
-  }
-
-  return false;
+bool elf_provider::check(void *address, size_t bytes) const {
+  bool success;
+  tie(ignore, ignore, success) = deref(address, bytes);
+  return success;
 }

@@ -21,7 +21,7 @@ direct_provider::~direct_provider() {
   free(data);
 }
 
-tuple<bool, binary_provider::entry_t> direct_provider::entry(string symbol) {
+tuple<bool, binary_provider::entry_t> direct_provider::entry(string symbol) const {
   if(symbol != "main") return binary_provider::entry(symbol);
 
   entry_t entry;
@@ -43,7 +43,7 @@ binary_provider::entry_t direct_provider::bin_range() {
   return range;
 }
 
-binary_provider::data_t direct_provider::get_data() {
+binary_provider::data_t direct_provider::get_data() const {
   data_t data;
   data.data = this->data;
   data.size = this->size;

@@ -35,7 +35,7 @@ stream_provider::~stream_provider() {
   free(data);
 }
 
-tuple<bool, binary_provider::entry_t> stream_provider::entry(string symbol) {
+tuple<bool, binary_provider::entry_t> stream_provider::entry(string symbol) const {
   if(symbol == "main") {
     entry_t entry;
     entry.address = 0;
@@ -56,7 +56,7 @@ binary_provider::entry_t stream_provider::bin_range() {
   return range;
 }
 
-binary_provider::data_t stream_provider::get_data() {
+binary_provider::data_t stream_provider::get_data() const {
   data_t data;
   data.data = this->data;
   data.size = this->size;

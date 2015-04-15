@@ -14,7 +14,7 @@ using std::make_tuple;
 binary_provider::~binary_provider() {
 }
 
-tuple<bool, binary_provider::entry_t> binary_provider::entry(string symbol) {
+tuple<bool, binary_provider::entry_t> binary_provider::entry(string symbol) const {
   auto it = symbols.find(symbol);
   if(it == symbols.end())
     return make_tuple(false, binary_provider::entry_t());
