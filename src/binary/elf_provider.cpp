@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <tuple>
 #include <vector>
+#include <iostream>
 
 using namespace std;
 
@@ -203,4 +204,8 @@ bool elf_provider::check(void *address, size_t bytes) const {
   bool success;
   tie(ignore, ignore, success) = deref(address, bytes);
   return success;
+}
+
+std::tuple<bool, slice> elf_provider::deref_slice(void *address) const {
+  return elf_mem->deref(address);
 }

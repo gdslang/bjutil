@@ -92,4 +92,5 @@ public:
   bool deref(void *address, size_t bytes, uint8_t *buffer) const;
   std::tuple<bool, size_t> deref(void *address) const;
   bool check(void *address, size_t bytes) const;
+  std::tuple<bool, slice> deref_slice(void *address) const;
 };
