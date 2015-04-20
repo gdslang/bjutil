@@ -23,7 +23,8 @@
 
 using namespace std;
 
-bool elf_provider::symbols(std::function<bool(GElf_Sym, string)> callback) const {
+bool elf_provider::symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> sect_cb,
+    std::function<bool(GElf_Sym, string)> symb_cb) const {
   size_t shstrndx;
   if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
 
@@ -37,13 +38,16 @@ bool elf_provider::symbols(std::function<bool(GElf_Sym, string)> callback) const
     char *section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
     if(!section_name) throw new string("gelf_strptr() :-(");
 
+//    cout << "section " << string(section_name) << " at " << shdr.sh_offset << " with address " << shdr.sh_addr << " and size " << shdr.sh_size << endl;
+    if(sect_cb(shdr.sh_addr, shdr.sh_size, string(section_name))) return true;
+
     if(!strcmp(section_name, ".symtab")) {
       if(!shdr.sh_entsize) throw new string("Empty entries in symbol table?!");
       for(uint64_t i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
         GElf_Sym sym;
         if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
         const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
-        if(callback(sym, string(sym_name))) return true;
+        if(symb_cb(sym, string(sym_name))) return true;
       }
     }
   }
@@ -60,13 +64,20 @@ void elf_provider::init() {
    */
   vector<slice> slices;
 
-  auto add_to_slices = [&](GElf_Sym sym, string name) {
-    if(sym.st_value != 0 && sym.st_size != 0) slices.push_back(
-        slice((void*) sym.st_value, sym.st_size, name));
+//  auto add_to_slices = [&](GElf_Sym sym, string name) {
+//    if(sym.st_value != 0 && sym.st_size != 0) slices.push_back(
+//        slice((void*) sym.st_value, sym.st_size, name));
+//    return false;
+//  };
+  auto add_to_slices = [&](Elf64_Addr addr, Elf64_Xword size, string name) {
+    if(addr != 0 && size != 0) slices.push_back(
+        slice((void*) addr, size, name));
     return false;
   };
 
-  symbols(add_to_slices);
+  symbols(add_to_slices, [&](GElf_Sym sym, string name) {
+    return false;
+  });
 
   elf_mem = new sliced_memory(slices);
 }
@@ -103,7 +114,7 @@ elf_provider::~elf_provider() {
   delete elf_mem;
 }
 
-tuple<bool, binary_provider::entry_t> elf_provider::entry(string symbol_name) const {
+tuple<bool, binary_provider::entry_t> elf_provider::symbol(string symbol_name) const {
   entry_t entry;
 
   size_t shstrndx;
@@ -119,8 +130,10 @@ tuple<bool, binary_provider::entry_t> elf_provider::entry(string symbol_name) co
     return false;
   };
 
-  if(!symbols(next_symbol))
-    return binary_provider::entry(symbol_name);
+  if(!symbols([&](Elf64_Addr addr, Elf64_Xword size, string name) {
+    return false;
+  }, next_symbol))
+    return binary_provider::symbol(symbol_name);
 
   Elf_Scn *scn = elf_getscn(elf->get_elf(), sym.st_shndx);
   if(scn == NULL) throw new string("elf_getscn() :/");
@@ -134,11 +147,7 @@ tuple<bool, binary_provider::entry_t> elf_provider::entry(string symbol_name) co
   return make_tuple(true, entry);
 }
 
-binary_provider::entry_t elf_provider::bin_range() {
-  return section(".text");
-}
-
-binary_provider::entry_t elf_provider::section(std::string name) {
+tuple<bool, binary_provider::entry_t> elf_provider::section(std::string section_name) const {
   entry_t range;
 
   size_t shstrndx;
@@ -152,10 +161,10 @@ binary_provider::entry_t elf_provider::section(std::string name) {
     GElf_Shdr shdr;
     if(gelf_getshdr(scn, &shdr) != &shdr) throw new string("gelf_getshdr() :-(");
 
-    char *section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
-    if(!section_name) throw new string("gelf_strptr() :-(");
+    char *current_section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
+    if(!current_section_name) throw new string("gelf_strptr() :-(");
 
-    if(!strcmp(section_name, name.c_str())) {
+    if(!strcmp(current_section_name, section_name.c_str())) {
       range.address = shdr.sh_addr;
       range.offset = shdr.sh_offset;
       range.size = shdr.sh_size;
@@ -163,9 +172,16 @@ binary_provider::entry_t elf_provider::section(std::string name) {
     }
   }
 
-  if(!found_section) throw new string("Invalid section");
+  return make_tuple(found_section, range);
+}
 
-  return range;
+binary_provider::entry_t elf_provider::bin_range() {
+  bool success;
+  entry_t entry;
+  tie(success, entry) = section(".text");
+  if(!success)
+    throw string("binary_provider::entry_t elf_provider::bin_range()");
+  return entry;
 }
 
 std::tuple<binary_provider::data_t, size_t, bool> elf_provider::deref(void *address, size_t bytes) const {
@@ -176,7 +192,7 @@ std::tuple<binary_provider::data_t, size_t, bool> elf_provider::deref(void *addr
   if(!success) return make_tuple(data_t(), 0, false);
 
   binary_provider::entry_t e;
-  tie(success, e) = entry(s.symbol);
+  tie(success, e) = section(s.symbol);
 
   size_t offset = e.offset + ((size_t) address - e.address);
 

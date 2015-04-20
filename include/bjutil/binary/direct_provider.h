@@ -17,7 +17,7 @@ public:
   direct_provider(uint8_t *data, size_t size);
   virtual ~direct_provider();
 
-  virtual tuple<bool, entry_t> entry(string symbol) const;
+  virtual tuple<bool, entry_t> symbol(string symbol_name) const;
   virtual entry_t bin_range();
   virtual data_t get_data() const;
 };

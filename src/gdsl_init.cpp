@@ -31,10 +31,14 @@ static bj_gdsl gdsl_init_elf_(gdsl::_frontend *f, std::string filename, std::str
       throw string("no elf() :/");
     }
   }();
-  binary_provider::entry_t section = elfp.section(section_name);
+  binary_provider::entry_t section;
+  bool success;
+  tie(success, section) = elfp.section(section_name);
+  if(!success)
+    throw string("Invalid section .text");
 
   binary_provider::entry_t function;
-  tie(ignore, function) = elfp.entry(function_name);
+  tie(ignore, function) = elfp.symbol(function_name);
 
   unsigned char *buffer = (unsigned char*)malloc(section.size);
   memcpy(buffer, elfp.get_data().data + section.offset, section.size);

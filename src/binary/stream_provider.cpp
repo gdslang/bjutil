@@ -35,15 +35,15 @@ stream_provider::~stream_provider() {
   free(data);
 }
 
-tuple<bool, binary_provider::entry_t> stream_provider::entry(string symbol) const {
-  if(symbol == "main") {
+tuple<bool, binary_provider::entry_t> stream_provider::symbol(string symbol_name) const {
+  if(symbol_name == "main") {
     entry_t entry;
     entry.address = 0;
     entry.offset = 0;
     entry.size = 0;
     return make_tuple(true, entry);
   }
-  return binary_provider::entry(symbol);
+  return binary_provider::symbol(symbol_name);
 }
 
 binary_provider::entry_t stream_provider::bin_range() {

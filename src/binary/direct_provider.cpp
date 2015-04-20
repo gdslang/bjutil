@@ -21,8 +21,8 @@ direct_provider::~direct_provider() {
   free(data);
 }
 
-tuple<bool, binary_provider::entry_t> direct_provider::entry(string symbol) const {
-  if(symbol != "main") return binary_provider::entry(symbol);
+tuple<bool, binary_provider::entry_t> direct_provider::symbol(string symbol_name) const {
+  if(symbol_name != "main") return binary_provider::symbol(symbol_name);
 
   entry_t entry;
 

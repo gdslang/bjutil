@@ -22,7 +22,7 @@ public:
   stream_provider(FILE *f);
   virtual ~stream_provider();
 
-  virtual tuple<bool, entry_t> entry(string symbol) const;
+  virtual tuple<bool, entry_t> symbol(string symbol_name) const;
   virtual entry_t bin_range();
   virtual data_t get_data() const;
 };

@@ -35,8 +35,8 @@ public:
     }
   };
 
-  virtual tuple<bool, entry_t> entry(string symbol) const;
-  void add_entry(string symbol, entry_t entry);
+  virtual tuple<bool, entry_t> symbol(string symbol_name) const;
+  void add_symbol(string symbol_name, entry_t entry);
 
   /**
    * Get the code section within the binary data (e.g. the .text section in an elf file)

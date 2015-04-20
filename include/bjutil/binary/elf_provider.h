@@ -16,7 +16,7 @@
 #include <tuple>
 #include <functional>
 
-class elf_provider : public file_provider {
+class elf_provider: public file_provider {
 private:
   sliced_memory *elf_mem;
 
@@ -25,7 +25,7 @@ private:
     }
   };
 
-  struct _file_fd : public _fd {
+  struct _file_fd: public _fd {
     int fd;
 
     int get_fd() {
@@ -41,7 +41,7 @@ private:
     }
   };
 
-  struct _mem_fd : public _fd {
+  struct _mem_fd: public _fd {
     char *memory;
 
     char *get_memory() {
@@ -77,16 +77,17 @@ private:
 
   _Elf *elf = NULL;
 
-  bool symbols(std::function<bool(GElf_Sym, string)> callback) const;
+  bool symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> sect_cb,
+      std::function<bool(GElf_Sym, string)> symb_cb) const;
   void init();
 public:
   elf_provider(char const *file);
   elf_provider(char *buffer, size_t size);
   ~elf_provider();
 
-  std::tuple<bool, entry_t> entry(std::string symbol) const;
+  std::tuple<bool, entry_t> symbol(std::string symbol_name) const;
+  std::tuple<bool, entry_t> section(std::string section_name) const;
   entry_t bin_range();
-  entry_t section(std::string name);
 
   std::tuple<data_t, size_t, bool> deref(void *address, size_t bytes) const;
   bool deref(void *address, size_t bytes, uint8_t *buffer) const;
