@@ -70,7 +70,7 @@ void elf_provider::init() {
 //    return false;
 //  };
   auto add_to_slices = [&](Elf64_Addr addr, Elf64_Xword size, string name) {
-    if(addr != 0 && size != 0) slices.push_back(
+    if(size != 0) slices.push_back(
         slice((void*) addr, size, name));
     return false;
   };
