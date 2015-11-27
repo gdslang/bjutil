@@ -24,7 +24,7 @@
 using namespace std;
 
 bool elf_provider::symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> sect_cb,
-    std::function<bool(GElf_Sym, string)> symb_cb) const {
+    std::function<bool(GElf_Sym, char st_type, string)> symb_cb) const {
   size_t shstrndx;
   if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
 
@@ -41,13 +41,15 @@ bool elf_provider::symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> 
 //    cout << "section " << string(section_name) << " at " << shdr.sh_offset << " with address " << shdr.sh_addr << " and size " << shdr.sh_size << endl;
     if(sect_cb(shdr.sh_addr, shdr.sh_size, string(section_name))) return true;
 
-    if(!strcmp(section_name, ".symtab")) {
+//    if(!strcmp(section_name, ".symtab")) {
+    if(shdr.sh_type == SHT_SYMTAB) {
       if(!shdr.sh_entsize) throw new string("Empty entries in symbol table?!");
       for(uint64_t i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
         GElf_Sym sym;
         if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
         const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
-        if(symb_cb(sym, string(sym_name))) return true;
+        char st_type = ELF64_ST_TYPE(sym.st_info);
+        if(symb_cb(sym, st_type, string(sym_name))) return true;
       }
     }
   }
@@ -75,7 +77,7 @@ void elf_provider::init() {
     return false;
   };
 
-  symbols(add_to_slices, [&](GElf_Sym sym, string name) {
+  symbols(add_to_slices, [&](GElf_Sym sym, char st_type, string name) {
     return false;
   });
 
@@ -114,6 +116,33 @@ elf_provider::~elf_provider() {
   delete elf_mem;
 }
 
+vector<std::tuple<string, binary_provider::entry_t>>  elf_provider::functions() const {
+  vector<std::tuple<string, binary_provider::entry_t>> result;
+
+  auto next_symbol = [&](GElf_Sym next_sym, char st_type, string next_name) {
+    if(st_type == STT_FUNC) {
+      Elf_Scn *scn = elf_getscn(elf->get_elf(), next_sym.st_shndx);
+      if(scn == NULL) throw new string("elf_getscn() :/");
+      GElf_Shdr shdr;
+      if(gelf_getshdr(scn, &shdr) != &shdr) throw new string("gelf_getshdr() :-(");
+
+      entry_t entry;
+      entry.address = next_sym.st_value;
+      entry.offset = shdr.sh_offset + (entry.address - shdr.sh_addr);;
+      entry.size = next_sym.st_size;
+
+      result.push_back(make_tuple(next_name, entry));
+    }
+    return false;
+  };
+
+  symbols([&](Elf64_Addr addr, Elf64_Xword size, string name) {
+    return false;
+  }, next_symbol);
+
+  return result;
+}
+
 tuple<bool, binary_provider::entry_t> elf_provider::symbol(string symbol_name) const {
   entry_t entry;
 
@@ -122,7 +151,7 @@ tuple<bool, binary_provider::entry_t> elf_provider::symbol(string symbol_name) c
 
   GElf_Sym sym;
 
-  auto next_symbol = [&](GElf_Sym next_sym, string next_name) {
+  auto next_symbol = [&](GElf_Sym next_sym, char st_type, string next_name) {
     if(next_name == symbol_name) {
       sym = next_sym;
       return true;

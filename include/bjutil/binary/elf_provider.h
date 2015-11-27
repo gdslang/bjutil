@@ -78,13 +78,14 @@ private:
   _Elf *elf = NULL;
 
   bool symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> sect_cb,
-      std::function<bool(GElf_Sym, string)> symb_cb) const;
+      std::function<bool(GElf_Sym, char st_type, string)> symb_cb) const;
   void init();
 public:
   elf_provider(char const *file);
   elf_provider(char *buffer, size_t size);
   ~elf_provider();
 
+  std::vector<std::tuple<string, entry_t>> functions() const;
   std::tuple<bool, entry_t> symbol(std::string symbol_name) const;
   std::tuple<bool, entry_t> section(std::string section_name) const;
   entry_t bin_range();

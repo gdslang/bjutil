@@ -2,8 +2,8 @@ CC=gcc
 #CC=clang
 CPP=clang++
 INCDS=-Iinclude
-CFLAGS=-c -MMD -ggdb3 -std=c11 -Wall -DRELAXEDFATAL $(INCDS)
-CPPFLAGS=-c -MMD -ggdb3 -std=c++11 -Wall -Wno-overloaded-virtual -Wno-deprecated $(INCDS)
+CFLAGS=$(CFLAGS_EXTRA) -c -MMD -ggdb3 -std=c11 -Wall -DRELAXEDFATAL $(INCDS)
+CPPFLAGS=$(CPPFLAGS_EXTRA) -c -MMD -ggdb3 -std=c++11 -Wall -Wno-overloaded-virtual -Wno-deprecated $(INCDS)
 
 LIBRARY=libbjutil.a
 
