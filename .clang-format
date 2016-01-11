@@ -1,0 +1,25 @@
+---
+# We'll use defaults from the LLVM style
+BasedOnStyle: LLVM
+IndentWidth: 2
+UseTab: Never
+---
+Language: Cpp
+Standard: Cpp11
+ColumnLimit: 120
+IndentCaseLabels: true
+DerivePointerAlignment: false
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: true
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+PointerAlignment: Right
+MaxEmptyLinesToKeep: 2
+SpacesBeforeTrailingComments: 1
+AlignAfterOpenBracket: false
+SpaceBeforeParens: Never
+IndentCaseLabels: true
+ContinuationIndentWidth: 2
+Cpp11BracedListStyle: true
+---
+
