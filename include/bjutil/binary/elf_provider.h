@@ -77,8 +77,31 @@ private:
 
   _Elf *elf = NULL;
 
-  bool symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> sect_cb,
-      std::function<bool(GElf_Sym, char st_type, string)> symb_cb) const;
+  struct entity_callbacks {
+    typedef std::function<bool(GElf_Sym, char st_type, string)> symbol_callback_t;
+
+    std::function<bool(GElf_Shdr, string)> section;
+    symbol_callback_t symbol;
+//    std::function<bool(GElf_Rela, Elf64_Xword dynsym_index)> rela;
+    std::function<bool(Elf64_Xword index, Elf64_Xword address)> section_entry;
+    symbol_callback_t dyn_symbol;
+
+    static bool _default() {
+      return false;
+    }
+
+    entity_callbacks() {
+//      std::function<bool()> _default = []() {
+//        return false;
+//      };
+      this->section = (bool (*)(GElf_Shdr, string))&_default;
+      this->symbol = (bool (*)(GElf_Sym, char st_type, string))&_default;
+      this->section_entry = (bool (*)(Elf64_Xword index, Elf64_Xword address))&_default;
+      this->dyn_symbol = (bool (*)(GElf_Sym, char st_type, string))&_default;
+    }
+  };
+
+  bool symbols(entity_callbacks const& callbacks) const;
   void init();
 public:
   elf_provider(char const *file);

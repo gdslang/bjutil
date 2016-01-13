@@ -23,8 +23,7 @@
 
 using namespace std;
 
-bool elf_provider::symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> sect_cb,
-    std::function<bool(GElf_Sym, char st_type, string)> symb_cb) const {
+bool elf_provider::symbols(entity_callbacks const& callbacks) const {
   size_t shstrndx;
   if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
 
@@ -39,17 +38,62 @@ bool elf_provider::symbols(std::function<bool(Elf64_Addr, Elf64_Xword, string)> 
     if(!section_name) throw new string("gelf_strptr() :-(");
 
 //    cout << "section " << string(section_name) << " at " << shdr.sh_offset << " with address " << shdr.sh_addr << " and size " << shdr.sh_size << endl;
-    if(sect_cb(shdr.sh_addr, shdr.sh_size, string(section_name))) return true;
+    if(callbacks.section(shdr, string(section_name))) return true;
 
 //    if(!strcmp(section_name, ".symtab")) {
-    if(shdr.sh_type == SHT_SYMTAB) {
-      if(!shdr.sh_entsize) throw new string("Empty entries in symbol table?!");
-      for(uint64_t i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
-        GElf_Sym sym;
-        if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
-        const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
-        char st_type = ELF64_ST_TYPE(sym.st_info);
-        if(symb_cb(sym, st_type, string(sym_name))) return true;
+    if(true || shdr.sh_type == SHT_SYMTAB) {
+      cout << "entry size: " << shdr.sh_entsize << endl;
+
+      if(!shdr.sh_entsize) continue;// throw new string("Empty entries in symbol table?!");
+      for(Elf64_Xword i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
+//        cout << "NEXT ENTRY " << i << " with address " << (shdr.sh_addr + i*shdr.sh_entsize) << endl;
+        if(callbacks.section_entry(i, (shdr.sh_addr + i*shdr.sh_entsize))) return true;
+
+        auto symbol = [&](entity_callbacks::symbol_callback_t symbol_cb) {
+          GElf_Sym sym;
+          if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
+          const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
+          cout << "sym_name: " << sym_name << ", and: " << sym.st_info << endl;
+          char st_type = ELF64_ST_TYPE(sym.st_info);
+          if(symbol_cb(sym, st_type, string(sym_name))) return true;
+          return false;
+        };
+
+        if(shdr.sh_type == SHT_SYMTAB) {
+          if(symbol(callbacks.symbol))
+            return true;
+        }
+
+        if(shdr.sh_type == SHT_DYNSYM) {
+//          GElf_Dyn dyn;
+//          if(gelf_getdyn(d, i, &dyn) == &dyn) {
+//            cout << dyn.d_tag << endl;
+//          }
+
+          if(symbol(callbacks.dyn_symbol))
+            return true;
+        }
+
+        if(shdr.sh_type == SHT_RELA) {
+//          GElf_Rela rela;
+//          if(gelf_getrela(d, i, &rela) == &rela) {
+//            cout << "RELA offset: " << rela.r_offset << ", addend: " << rela.r_addend << ", info: " << ELF64_R_SYM(rela.r_info) << endl;
+//          }
+        }
+
+        if(shdr.sh_type == SHT_REL) {
+//          GElf_Rel rel;
+//          if(gelf_getrel(d, i, &rel) == &rel) {
+//            cout << "REL" << endl;
+//            cout << "offset: " << rel.r_offset << "info: " << ELF64_R_SYM(rela.r_info) << endl;
+//          }
+        }
+
+//        GElf_Phdr vv;
+//        if(gelf_getphdr(elf->get_elf(), i, &vv) == &vv) {
+////          const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, vv.p_filesz);
+//          cout << "PHDR offset: " << vv.p_offset << ", paddr: " << vv.p_paddr << ", vaddr: " << vv.p_vaddr << endl;
+//        }
       }
     }
   }
@@ -71,15 +115,15 @@ void elf_provider::init() {
 //        slice((void*) sym.st_value, sym.st_size, name));
 //    return false;
 //  };
-  auto add_to_slices = [&](Elf64_Addr addr, Elf64_Xword size, string name) {
-    if(size != 0) slices.push_back(
-        slice((void*) addr, size, name));
+  auto add_to_slices = [&](GElf_Shdr shdr, string name) {
+    if(shdr.sh_size != 0) slices.push_back(
+        slice((void*) shdr.sh_addr, shdr.sh_size, name));
     return false;
   };
+  entity_callbacks callbacks;
+  callbacks.section = add_to_slices;
 
-  symbols(add_to_slices, [&](GElf_Sym sym, char st_type, string name) {
-    return false;
-  });
+  symbols(callbacks);
 
   elf_mem = new sliced_memory(slices);
 }
@@ -136,9 +180,10 @@ vector<std::tuple<string, binary_provider::entry_t>>  elf_provider::functions() 
     return false;
   };
 
-  symbols([&](Elf64_Addr addr, Elf64_Xword size, string name) {
-    return false;
-  }, next_symbol);
+  entity_callbacks callbacks;
+  callbacks.symbol = next_symbol;
+
+  symbols(callbacks);
 
   return result;
 }
@@ -158,10 +203,10 @@ tuple<bool, binary_provider::entry_t> elf_provider::symbol(string symbol_name) c
     }
     return false;
   };
+  entity_callbacks callbacks;
+  callbacks.symbol = next_symbol;
 
-  if(!symbols([&](Elf64_Addr addr, Elf64_Xword size, string name) {
-    return false;
-  }, next_symbol))
+  if(!symbols(callbacks))
     return binary_provider::symbol(symbol_name);
 
   Elf_Scn *scn = elf_getscn(elf->get_elf(), sym.st_shndx);
