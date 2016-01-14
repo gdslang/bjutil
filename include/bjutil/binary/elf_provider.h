@@ -86,22 +86,18 @@ private:
     std::function<bool(Elf64_Xword index, Elf64_Xword address)> section_entry;
     symbol_callback_t dyn_symbol;
 
-    static bool _default() {
-      return false;
-    }
-
     entity_callbacks() {
-//      std::function<bool()> _default = []() {
-//        return false;
-//      };
-      this->section = (bool (*)(GElf_Shdr, string))&_default;
-      this->symbol = (bool (*)(GElf_Sym, char st_type, string))&_default;
-      this->section_entry = (bool (*)(Elf64_Xword index, Elf64_Xword address))&_default;
-      this->dyn_symbol = (bool (*)(GElf_Sym, char st_type, string))&_default;
+      auto _default = [](auto... args) {
+        return false;
+      };
+      this->section = _default;
+      this->symbol = _default;
+      this->section_entry = _default;
+      this->dyn_symbol = _default;
     }
   };
 
-  bool symbols(entity_callbacks const& callbacks) const;
+  bool traverse_sections(entity_callbacks const& callbacks) const;
   void init();
 public:
   elf_provider(char const *file);
@@ -109,6 +105,7 @@ public:
   ~elf_provider();
 
   std::vector<std::tuple<string, entry_t>> functions() const;
+  std::vector<std::tuple<string, entry_t>> functions_dynamic() const;
   std::tuple<bool, entry_t> symbol(std::string symbol_name) const;
   std::tuple<bool, entry_t> section(std::string section_name) const;
   entry_t bin_range();
