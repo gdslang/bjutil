@@ -40,16 +40,16 @@ bool elf_provider::traverse_sections(entity_callbacks const &callbacks) const {
     char *section_name = elf_strptr(elf->get_elf(), shstrndx, shdr.sh_name);
     if(!section_name) throw new string("gelf_strptr() :-(");
 
-//        cout << "section " << string(section_name) << " at " << shdr.sh_offset << " with address " << shdr.sh_addr
-//             << " and size " << shdr.sh_size << " and type " << shdr.sh_type << endl;
+//    cout << "section " << string(section_name) << " at " << shdr.sh_offset << " with address " << shdr.sh_addr
+//         << " and size " << shdr.sh_size << " and type " << shdr.sh_type << endl;
     if(callbacks.section(shdr, string(section_name))) return true;
 
     //    if(!strcmp(section_name, ".symtab")) {
-//    cout << "entry size: " << shdr.sh_entsize << endl;
+    //    cout << "entry size: " << shdr.sh_entsize << endl;
 
     if(!shdr.sh_entsize) continue; // throw new string("Empty entries in symbol table?!");
     for(Elf64_Xword i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
-      //        cout << "NEXT ENTRY " << i << " with address " << (shdr.sh_addr + i*shdr.sh_entsize) << endl;
+//      cout << "NEXT ENTRY " << i << " with address " << (shdr.sh_addr + i * shdr.sh_entsize) << endl;
       if(callbacks.section_entry(i, (shdr.sh_addr + i * shdr.sh_entsize))) return true;
 
       auto symbol = [&](entity_callbacks::symbol_callback_t symbol_cb) {
@@ -194,29 +194,32 @@ vector<tuple<string, binary_provider::entry_t>> elf_provider::functions_dynamic(
 
   optional<Elf64_Word> sh_type_current;
   optional<string> section_name_current;
+
   optional<Elf64_Word> index_last;
 
   entity_callbacks callbacks;
   callbacks.section = [&](GElf_Shdr shdr, string name) {
     sh_type_current = shdr.sh_type;
     section_name_current = name;
+    index_last = nullopt;
     return false;
   };
   callbacks.section_entry = [&](Elf64_Xword index, Elf64_Xword address) {
-//    if(sh_type_current.value() == SHT_PROGBITS)
-//      cout << address << endl;
-    index_last = nullopt;
+    //    if(sh_type_current.value() == SHT_PROGBITS)
+    //      cout << address << endl;
     if(sh_type_current.value() == SHT_PROGBITS && section_name_current.value() == ".plt") {
       plt_index_addresses[index] = address;
-    } else if(sh_type_current.value() == SHT_DYNSYM)
-      index_last = index;
+    } else if(sh_type_current.value() == SHT_DYNSYM && index == 0)
+      index_last = 0;
     return false;
   };
   callbacks.dyn_symbol = [&](GElf_Sym sym, char st_type, string name) {
-//    assert(ELF64_ST_TYPE(sym.st_info) == STT_FUNC);
+    if(sym.st_value != 0) return false;
+    //    assert(ELF64_ST_TYPE(sym.st_info) == STT_FUNC);
     dyn_index_sym_names[index_last.value()] = name;
-//    cout << "dyn: " << index_last.value() << " -> " << name << endl;
-//    cout << "dyn: " << dyn_index_sym_names.at(index_last.value()) << endl;
+    index_last.value()++;
+    //    cout << "dyn: " << index_last.value() << " -> " << name << endl;
+    //    cout << "dyn: " << dyn_index_sym_names.at(index_last.value()) << endl;
     return false;
   };
 
@@ -225,8 +228,7 @@ vector<tuple<string, binary_provider::entry_t>> elf_provider::functions_dynamic(
   vector<tuple<string, binary_provider::entry_t>> result;
   for(auto is_it : dyn_index_sym_names) {
     auto plt_it = plt_index_addresses.find(is_it.first);
-    if(plt_it == plt_index_addresses.end())
-      continue;
+    if(plt_it == plt_index_addresses.end()) continue;
     entry_t e;
     e.offset = 0;
     e.size = 0;
