@@ -97,7 +97,7 @@ private:
     }
   };
 
-  bool traverse_sections(entity_callbacks const& callbacks) const;
+  bool traverse_sections(entity_callbacks const& callbacka, bool entries) const;
   void init();
 public:
   elf_provider(char const *file);

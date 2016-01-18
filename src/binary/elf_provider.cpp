@@ -22,11 +22,12 @@
 #include <iostream>
 #include <experimental/optional>
 #include <assert.h>
+#include <set>
 
 using namespace std;
 using namespace std::experimental;
 
-bool elf_provider::traverse_sections(entity_callbacks const &callbacks) const {
+bool elf_provider::traverse_sections(entity_callbacks const &callbacks, bool entries) const {
   size_t shstrndx;
   if(elf_getshstrndx(elf->get_elf(), &shstrndx) != 0) throw new string(":-(");
 
@@ -47,7 +48,7 @@ bool elf_provider::traverse_sections(entity_callbacks const &callbacks) const {
     //    if(!strcmp(section_name, ".symtab")) {
     //    cout << "entry size: " << shdr.sh_entsize << endl;
 
-    if(!shdr.sh_entsize) continue; // throw new string("Empty entries in symbol table?!");
+    if(!entries || !shdr.sh_entsize) continue; // throw new string("Empty entries in symbol table?!");
     for(Elf64_Xword i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
 //      cout << "NEXT ENTRY " << i << " with address " << (shdr.sh_addr + i * shdr.sh_entsize) << endl;
       if(callbacks.section_entry(i, (shdr.sh_addr + i * shdr.sh_entsize))) return true;
@@ -124,7 +125,7 @@ void elf_provider::init() {
   entity_callbacks callbacks;
   callbacks.section = add_to_slices;
 
-  traverse_sections(callbacks);
+  traverse_sections(callbacks, false);
 
   elf_mem = new sliced_memory(slices);
 }
@@ -183,19 +184,35 @@ vector<std::tuple<string, binary_provider::entry_t>> elf_provider::functions() c
   entity_callbacks callbacks;
   callbacks.symbol = next_symbol;
 
-  traverse_sections(callbacks);
+  traverse_sections(callbacks, true);
 
   return result;
 }
 
 vector<tuple<string, binary_provider::entry_t>> elf_provider::functions_dynamic() const {
+  Elf64_Addr plt_addr;
+  Elf64_Xword plt_size;
+  entity_callbacks callbacks_search_plt;
+  callbacks_search_plt.section = [&](GElf_Shdr shdr, string name) {
+    if(shdr.sh_type == SHT_PROGBITS && name == ".plt") {
+      plt_addr = shdr.sh_addr;
+      plt_size = shdr.sh_size;
+      return true;
+    }
+    return false;
+  };
+  traverse_sections(callbacks_search_plt, false);
+
   map<Elf64_Xword, string> dyn_index_sym_names;
   map<Elf64_Xword, size_t> plt_index_addresses;
 
-  optional<Elf64_Word> sh_type_current;
+  optional<Elf64_Xword> sh_type_current;
   optional<string> section_name_current;
+  optional<Elf64_Xword> index_last;
 
-  optional<Elf64_Word> index_last;
+  set<size_t> fixed_addr_entries_plt;
+
+  vector<tuple<string, binary_provider::entry_t>> result;
 
   entity_callbacks callbacks;
   callbacks.section = [&](GElf_Shdr shdr, string name) {
@@ -214,7 +231,24 @@ vector<tuple<string, binary_provider::entry_t>> elf_provider::functions_dynamic(
     return false;
   };
   callbacks.dyn_symbol = [&](GElf_Sym sym, char st_type, string name) {
-    if(sym.st_value != 0) return false;
+//    cout << name << ": TYPE " << (int)st_type << endl;
+    if(sym.st_value != 0 || (index_last.value() > 0 && st_type != STT_FUNC)) {
+      if(sym.st_value < plt_addr || sym.st_value >= plt_addr + plt_size) {
+        cout << "Ignoring " << name << endl;
+        return false;
+      } else {
+        fixed_addr_entries_plt.insert(sym.st_value);
+//        index_last.value()++;
+        cout << "FIXED " << name << "@" << hex << sym.st_value << dec << endl;
+
+        entry_t e;
+        e.offset = 0;
+        e.size = 0;
+        e.address = sym.st_value;
+        result.push_back(make_tuple(name, e));
+        return false;
+      }
+    }
     //    assert(ELF64_ST_TYPE(sym.st_info) == STT_FUNC);
     dyn_index_sym_names[index_last.value()] = name;
     index_last.value()++;
@@ -223,18 +257,70 @@ vector<tuple<string, binary_provider::entry_t>> elf_provider::functions_dynamic(
     return false;
   };
 
-  traverse_sections(callbacks);
+  traverse_sections(callbacks, true);
 
-  vector<tuple<string, binary_provider::entry_t>> result;
-  for(auto is_it : dyn_index_sym_names) {
-    auto plt_it = plt_index_addresses.find(is_it.first);
-    if(plt_it == plt_index_addresses.end()) continue;
-    entry_t e;
-    e.offset = 0;
-    e.size = 0;
-    e.address = plt_it->second;
-    result.push_back(make_tuple(is_it.second, e));
+  int i = 0;
+
+  auto is_it = dyn_index_sym_names.begin();
+  for(auto plt_it : plt_index_addresses) {
+    size_t addr = plt_it.second;
+    cout << "ADDRESS: " << hex << addr << dec << "       ";
+    if(fixed_addr_entries_plt.find(addr) == fixed_addr_entries_plt.end()) {
+      assert(is_it != dyn_index_sym_names.end());
+      string name = is_it->second;
+      is_it++;
+
+//      if(name == "malloc")
+        cout << name << "     =>     " << i << endl;
+//      else
+//        cout << "@@" << i << endl;
+      i++;
+
+      entry_t e;
+      e.offset = 0;
+      e.size = 0;
+      e.address = addr;
+      result.push_back(make_tuple(name, e));
+    } else {
+      cout << "Not considering fixed entry " << hex << addr << dec << endl;
+    }
   }
+
+//  for(auto is_it : dyn_index_sym_names) {
+//    Elf64_Xword index = is_it.first;
+//
+//    cout << "Assuming index of " << is_it.second << " to be " << index << "...";
+//
+//    auto plt_it = plt_index_addresses.find(index);
+////    assert(plt_it != plt_index_addresses.end());
+//    if(plt_it == plt_index_addresses.end()) continue;
+//
+//    for(size_t i = 0; i < fixed_count; i++) {
+//      if(i > index)
+//        break;
+//      entry_t e;
+//      tie(ignore, e) = result[i];
+//      if(e.address > )
+//    }
+//
+//    for(Elf64_Addr fixed : fixed_addr_entries_plt) {
+////      assert(fixed != plt_it->second);
+//      if(fixed > plt_it->second)
+//        break;
+//      index--;
+//    }
+//
+//    cout << "Actually, the index is " << index << endl;
+//
+//    plt_it = plt_index_addresses.find(index);
+//    assert(plt_it != plt_index_addresses.end());
+//
+//    entry_t e;
+//    e.offset = 0;
+//    e.size = 0;
+//    e.address = plt_it->second;
+//    result.push_back(make_tuple(is_it.second, e));
+//  }
 
   return result;
 }
@@ -257,7 +343,7 @@ tuple<bool, binary_provider::entry_t> elf_provider::symbol(string symbol_name) c
   entity_callbacks callbacks;
   callbacks.symbol = next_symbol;
 
-  if(!traverse_sections(callbacks)) return binary_provider::symbol(symbol_name);
+  if(!traverse_sections(callbacks, true)) return binary_provider::symbol(symbol_name);
 
   Elf_Scn *scn = elf_getscn(elf->get_elf(), sym.st_shndx);
   if(scn == NULL) throw new string("elf_getscn() :/");
