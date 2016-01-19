@@ -85,6 +85,8 @@ private:
 //    std::function<bool(GElf_Rela, Elf64_Xword dynsym_index)> rela;
     std::function<bool(Elf64_Xword index, Elf64_Xword address)> section_entry;
     symbol_callback_t dyn_symbol;
+    std::function<bool(Elf64_Addr address)> plt_got_address;
+    std::function<bool(GElf_Rela rela)> rela;
 
     entity_callbacks() {
       auto _default = [](auto... args) {
@@ -94,6 +96,8 @@ private:
       this->symbol = _default;
       this->section_entry = _default;
       this->dyn_symbol = _default;
+      this->plt_got_address = _default;
+      this->rela = _default;
     }
   };
 

@@ -23,6 +23,7 @@
 #include <experimental/optional>
 #include <assert.h>
 #include <set>
+#include <endian.h>
 
 using namespace std;
 using namespace std::experimental;
@@ -45,19 +46,24 @@ bool elf_provider::traverse_sections(entity_callbacks const &callbacks, bool ent
 //         << " and size " << shdr.sh_size << " and type " << shdr.sh_type << endl;
     if(callbacks.section(shdr, string(section_name))) return true;
 
+    //    Elf_Data data;
+    //    elf_getdata(scn, &data);
+    ////    elf_getdata_rawchunk(elf, shdr.sh_offset, 5, ELF_T_BYTE);
+
     //    if(!strcmp(section_name, ".symtab")) {
     //    cout << "entry size: " << shdr.sh_entsize << endl;
 
     if(!entries || !shdr.sh_entsize) continue; // throw new string("Empty entries in symbol table?!");
     for(Elf64_Xword i = 0; i < shdr.sh_size / shdr.sh_entsize; ++i) {
 //      cout << "NEXT ENTRY " << i << " with address " << (shdr.sh_addr + i * shdr.sh_entsize) << endl;
-      if(callbacks.section_entry(i, (shdr.sh_addr + i * shdr.sh_entsize))) return true;
+      Elf64_Xword entry_address = shdr.sh_addr + i * shdr.sh_entsize;
+      if(callbacks.section_entry(i, entry_address)) return true;
 
       auto symbol = [&](entity_callbacks::symbol_callback_t symbol_cb) {
         GElf_Sym sym;
         if(gelf_getsym(d, i, &sym) != &sym) throw new string("getsym() failed\n");
         const char *sym_name = elf_strptr(elf->get_elf(), shdr.sh_link, sym.st_name);
-//        cout << "sym_name: " << sym_name << ", and: " << sym.st_info << endl;
+        //        cout << "sym_name: " << sym_name << ", and: " << sym.st_info << endl;
         char st_type = ELF64_ST_TYPE(sym.st_info);
         if(symbol_cb(sym, st_type, string(sym_name))) return true;
         return false;
@@ -77,19 +83,28 @@ bool elf_provider::traverse_sections(entity_callbacks const &callbacks, bool ent
       }
 
       if(shdr.sh_type == SHT_RELA) {
-        //          GElf_Rela rela;
-        //          if(gelf_getrela(d, i, &rela) == &rela) {
-        //            cout << "RELA offset: " << rela.r_offset << ", addend: " << rela.r_addend << ", info: " <<
-        //            ELF64_R_SYM(rela.r_info) << endl;
-        //          }
+        GElf_Rela rela;
+        if(gelf_getrela(d, i, &rela) == &rela) {
+        if(callbacks.rela(rela)) return true;
+//          cout << "RELA offset: " << rela.r_offset << ", addend: " << rela.r_addend
+//               << ", info: " << ELF64_R_SYM(rela.r_info) << endl;
+        }
       }
 
-      if(shdr.sh_type == SHT_REL) {
-        //          GElf_Rel rel;
-        //          if(gelf_getrel(d, i, &rel) == &rel) {
-        //            cout << "REL" << endl;
-        //            cout << "offset: " << rel.r_offset << "info: " << ELF64_R_SYM(rela.r_info) << endl;
-        //          }
+//      if(shdr.sh_type == SHT_REL) {
+//        GElf_Rel rel;
+//        if(gelf_getrel(d, i, &rel) == &rel) {
+//          cout << "REL" << endl;
+//          cout << "offset: " << rel.r_offset << "info: " << ELF64_R_SYM(rel.r_info) << endl;
+//        }
+//      }
+
+      if(shdr.sh_type == SHT_PROGBITS && section_name == string(".plt")) {
+        Elf64_Xword offset = i * shdr.sh_entsize;
+        Elf64_Xword offset_got = le32toh(*((uint32_t *)((char *)d->d_buf + offset + 2)));
+        Elf64_Addr address_got = entry_address + offset_got + 6;
+//        cout << "ADDRESS_GOT: " << address_got << endl;
+        if(callbacks.plt_got_address(address_got)) return true;
       }
 
       //        GElf_Phdr vv;
@@ -190,137 +205,65 @@ vector<std::tuple<string, binary_provider::entry_t>> elf_provider::functions() c
 }
 
 vector<tuple<string, binary_provider::entry_t>> elf_provider::functions_dynamic() const {
-  Elf64_Addr plt_addr;
-  Elf64_Xword plt_size;
-  entity_callbacks callbacks_search_plt;
-  callbacks_search_plt.section = [&](GElf_Shdr shdr, string name) {
-    if(shdr.sh_type == SHT_PROGBITS && name == ".plt") {
-      plt_addr = shdr.sh_addr;
-      plt_size = shdr.sh_size;
-      return true;
-    }
-    return false;
-  };
-  traverse_sections(callbacks_search_plt, false);
+  map<Elf64_Addr, Elf64_Addr> plt_addr_to_got_addr;
+  map<Elf64_Addr, Elf64_Xword> got_addr_to_symbol_index;
+  map<Elf64_Xword, string> symbol_index_to_name;
 
-  map<Elf64_Xword, string> dyn_index_sym_names;
-  map<Elf64_Xword, size_t> plt_index_addresses;
-
-  optional<Elf64_Xword> sh_type_current;
-  optional<string> section_name_current;
-  optional<Elf64_Xword> index_last;
-
-  set<size_t> fixed_addr_entries_plt;
+  optional<Elf64_Xword> current_entry_index;
+  optional<Elf64_Addr> current_entry_addr;
+  optional<Elf64_Xword> current_sh_type;
+  optional<string> current_sh_name;
 
   vector<tuple<string, binary_provider::entry_t>> result;
+  auto entry = [&](string name, size_t address) {
+    entry_t e;
+    e.offset = 0;
+    e.size = 0;
+    e.address = address;
+    result.push_back(make_tuple(name, e));
+  };
 
   entity_callbacks callbacks;
   callbacks.section = [&](GElf_Shdr shdr, string name) {
-    sh_type_current = shdr.sh_type;
-    section_name_current = name;
-    index_last = nullopt;
+    current_sh_type = shdr.sh_type;
+    current_sh_name = name;
+    current_entry_index = nullopt;
+    current_entry_addr = nullopt;
+//    index_last = nullopt;
     return false;
   };
   callbacks.section_entry = [&](Elf64_Xword index, Elf64_Xword address) {
-    //    if(sh_type_current.value() == SHT_PROGBITS)
-    //      cout << address << endl;
-    if(sh_type_current.value() == SHT_PROGBITS && section_name_current.value() == ".plt") {
-      plt_index_addresses[index] = address;
-    } else if(sh_type_current.value() == SHT_DYNSYM && index == 0)
-      index_last = 0;
+    current_entry_index = index;
+    current_entry_addr = address;
+    return false;
+  };
+  callbacks.plt_got_address = [&](Elf64_Addr addr) {
+    assert(current_sh_type.value() == SHT_PROGBITS && current_sh_name.value() == ".plt");
+    plt_addr_to_got_addr[current_entry_addr.value()] = addr;
+    return false;
+  };
+  callbacks.rela = [&](GElf_Rela rela) {
+    got_addr_to_symbol_index[rela.r_offset] = ELF64_R_SYM(rela.r_info);
     return false;
   };
   callbacks.dyn_symbol = [&](GElf_Sym sym, char st_type, string name) {
-//    cout << name << ": TYPE " << (int)st_type << endl;
-    if(sym.st_value != 0 || (index_last.value() > 0 && st_type != STT_FUNC)) {
-      if(sym.st_value < plt_addr || sym.st_value >= plt_addr + plt_size) {
-        cout << "Ignoring " << name << endl;
-        return false;
-      } else {
-        fixed_addr_entries_plt.insert(sym.st_value);
-//        index_last.value()++;
-        cout << "FIXED " << name << "@" << hex << sym.st_value << dec << endl;
-
-        entry_t e;
-        e.offset = 0;
-        e.size = 0;
-        e.address = sym.st_value;
-        result.push_back(make_tuple(name, e));
-        return false;
-      }
-    }
-    //    assert(ELF64_ST_TYPE(sym.st_info) == STT_FUNC);
-    dyn_index_sym_names[index_last.value()] = name;
-    index_last.value()++;
-    //    cout << "dyn: " << index_last.value() << " -> " << name << endl;
-    //    cout << "dyn: " << dyn_index_sym_names.at(index_last.value()) << endl;
+    if(sym.st_value != 0)
+      entry(name, sym.st_value);
+    else
+      symbol_index_to_name[current_entry_index.value()] = name;
     return false;
   };
-
   traverse_sections(callbacks, true);
 
-  int i = 0;
-
-  auto is_it = dyn_index_sym_names.begin();
-  for(auto plt_it : plt_index_addresses) {
-    size_t addr = plt_it.second;
-    cout << "ADDRESS: " << hex << addr << dec << "       ";
-    if(fixed_addr_entries_plt.find(addr) == fixed_addr_entries_plt.end()) {
-      assert(is_it != dyn_index_sym_names.end());
-      string name = is_it->second;
-      is_it++;
-
-//      if(name == "malloc")
-        cout << name << "     =>     " << i << endl;
-//      else
-//        cout << "@@" << i << endl;
-      i++;
-
-      entry_t e;
-      e.offset = 0;
-      e.size = 0;
-      e.address = addr;
-      result.push_back(make_tuple(name, e));
-    } else {
-      cout << "Not considering fixed entry " << hex << addr << dec << endl;
-    }
+  for(auto &plt_got : plt_addr_to_got_addr) {
+    auto gs_it = got_addr_to_symbol_index.find(plt_got.second);
+    if(gs_it == got_addr_to_symbol_index.end())
+      continue;
+    auto sn_it = symbol_index_to_name.find(gs_it->second);
+    if(sn_it == symbol_index_to_name.end())
+      continue;
+    entry(sn_it->second, plt_got.first);
   }
-
-//  for(auto is_it : dyn_index_sym_names) {
-//    Elf64_Xword index = is_it.first;
-//
-//    cout << "Assuming index of " << is_it.second << " to be " << index << "...";
-//
-//    auto plt_it = plt_index_addresses.find(index);
-////    assert(plt_it != plt_index_addresses.end());
-//    if(plt_it == plt_index_addresses.end()) continue;
-//
-//    for(size_t i = 0; i < fixed_count; i++) {
-//      if(i > index)
-//        break;
-//      entry_t e;
-//      tie(ignore, e) = result[i];
-//      if(e.address > )
-//    }
-//
-//    for(Elf64_Addr fixed : fixed_addr_entries_plt) {
-////      assert(fixed != plt_it->second);
-//      if(fixed > plt_it->second)
-//        break;
-//      index--;
-//    }
-//
-//    cout << "Actually, the index is " << index << endl;
-//
-//    plt_it = plt_index_addresses.find(index);
-//    assert(plt_it != plt_index_addresses.end());
-//
-//    entry_t e;
-//    e.offset = 0;
-//    e.size = 0;
-//    e.address = plt_it->second;
-//    result.push_back(make_tuple(is_it.second, e));
-//  }
 
   return result;
 }
