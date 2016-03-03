@@ -175,6 +175,11 @@ elf_provider::~elf_provider() {
   delete elf_mem;
 }
 
+Elf64_Addr elf_provider::entry_address() const {
+  Elf64_Ehdr *ehdr = elf64_getehdr(elf->get_elf());
+  return ehdr->e_entry;
+}
+
 vector<std::tuple<string, binary_provider::entry_t>> elf_provider::functions() const {
   vector<std::tuple<string, binary_provider::entry_t>> result;
 

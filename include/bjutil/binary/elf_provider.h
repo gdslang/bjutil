@@ -108,6 +108,7 @@ public:
   elf_provider(char *buffer, size_t size);
   ~elf_provider();
 
+  Elf64_Addr entry_address() const;
   std::vector<std::tuple<string, entry_t>> functions() const;
   std::vector<std::tuple<string, entry_t>> functions_dynamic() const;
   std::tuple<bool, entry_t> symbol(std::string symbol_name) const;
