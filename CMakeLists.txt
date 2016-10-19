@@ -32,10 +32,13 @@ file(GLOB_RECURSE SOURCES
     "src/**.cpp"
 )
 
-include_directories("include/")
 add_library(bjutil ${SOURCES})
 set_property(TARGET bjutil PROPERTY CXX_STANDARD 14)
 target_link_libraries(bjutil elf)
+target_include_directories(bjutil PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
+  $<INSTALL_INTERFACE:include/>  # <prefix>/include/
+)
 
 install(TARGETS bjutil
   # IMPORTANT: Add the library to the "export-set"
