@@ -34,7 +34,7 @@ file(GLOB_RECURSE SOURCES
 
 add_library(bjutil ${SOURCES})
 set_property(TARGET bjutil PROPERTY CXX_STANDARD 14)
-target_link_libraries(bjutil elf)
+target_link_libraries(bjutil cppgdsl elf)
 target_include_directories(bjutil PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
   $<INSTALL_INTERFACE:include/>  # <prefix>/include/
