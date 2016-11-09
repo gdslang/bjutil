@@ -15,11 +15,27 @@
 
 class stream_provider : public binary_provider {
 private:
-  uint8_t *data = NULL;
+  uint8_t *data = nullptr;
   size_t size;
 
 public:
   stream_provider(FILE *f);
+  stream_provider(stream_provider const&) = delete;
+  stream_provider(stream_provider &&other) : binary_provider(std::move(other)) {
+    data = other.data;
+    size = other.size;
+    other.data = nullptr;
+    other.size = 0;
+  }
+  stream_provider& operator=(stream_provider const&) = delete;
+  stream_provider& operator=(stream_provider &&other) {
+    binary_provider::operator=(std::move(other));
+    data = other.data;
+    size = other.size;
+    other.data = nullptr;
+    other.size = 0;
+    return *this;
+  }
   virtual ~stream_provider();
 
   virtual tuple<bool, entry_t> symbol(string symbol_name) const;

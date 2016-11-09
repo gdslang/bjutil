@@ -106,6 +106,27 @@ private:
 public:
   elf_provider(char const *file);
   elf_provider(char *buffer, size_t size);
+  elf_provider(FILE *f);
+  elf_provider(elf_provider const&) = delete;
+  elf_provider(elf_provider &&other) : file_provider(std::move(other)) {
+    elf_mem = other.elf_mem;
+    fd = other.fd;
+    elf = other.elf;
+    other.elf_mem = nullptr;
+    other.fd = nullptr;
+    other.elf = nullptr;
+  }
+  elf_provider& operator=(elf_provider const&) = delete;
+  elf_provider& operator=(elf_provider &&other) {
+    file_provider::operator=(std::move(other));
+    elf_mem = other.elf_mem;
+    fd = other.fd;
+    elf = other.elf;
+    other.elf_mem = nullptr;
+    other.fd = nullptr;
+    other.elf = nullptr;
+    return *this;
+  }
   ~elf_provider();
 
   Elf64_Addr entry_address() const;

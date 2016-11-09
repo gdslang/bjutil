@@ -19,6 +19,11 @@ using std::map;
 
 class binary_provider {
 public:
+  binary_provider() = default;
+  binary_provider(binary_provider const&) = default;
+  binary_provider& operator=(binary_provider const&) = default;
+  binary_provider(binary_provider &&) = default;
+  binary_provider& operator=(binary_provider &&) = default;
   virtual ~binary_provider();
 
   struct entry_t {
