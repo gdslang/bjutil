@@ -21,6 +21,21 @@ public:
 
   bj_gdsl(gdsl::gdsl *gdsl, void *buffer) : gdsl(gdsl), buffer(buffer) {
   }
+  bj_gdsl(bj_gdsl const&) = delete;
+  bj_gdsl& operator=(bj_gdsl const&) = delete;
+  bj_gdsl(bj_gdsl &&other) {
+    buffer = other.buffer;
+    gdsl = other.gdsl;
+    other.buffer = nullptr;
+    other.gdsl = nullptr;
+  }
+  bj_gdsl& operator=(bj_gdsl &&other) {
+    buffer = other.buffer;
+    gdsl = other.gdsl;
+    other.buffer = nullptr;
+    other.gdsl = nullptr;
+    return *this;
+  }
   ~bj_gdsl();
 };
 
